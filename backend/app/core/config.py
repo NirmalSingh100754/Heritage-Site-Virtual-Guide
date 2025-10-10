@@ -5,13 +5,14 @@ load_dotenv()
 
 class Settings:
     # MongoDB Configuration
-    MONGODB_USERNAME: str = os.getenv("MONGODB_USERNAME", "indranilsamanta2003")
-    MONGODB_PASSWORD: str = os.getenv("MONGODB_PASSWORD", "indu94070@2003")
-    MONGODB_CLUSTER: str = os.getenv("MONGODB_CLUSTER", "clusterheritage.aedeqma.mongodb.net")
+    MONGODB_USERNAME: str = os.getenv("MONGODB_USERNAME")
+    MONGODB_PASSWORD: str = os.getenv("MONGODB_PASSWORD")
+    MONGODB_CLUSTER: str = os.getenv("MONGODB_CLUSTER")
     MONGODB_DATABASE: str = os.getenv("MONGODB_DATABASE", "heritage_db")
     
-    # Gemini AI Configuration
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "your_gemini_api_key_here")
+    # AI Configuration - Using OpenRouter instead of Gemini
+    OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_KEY")
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     
     # App Configuration
     PROJECT_NAME: str = "Heritage Virtual Guide API"

@@ -19,10 +19,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS
+# Configure CORS - IMPORTANT: Add your Streamlit port
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501", "http://192.168.1.2:8501"],  # Streamlit addresses
+    allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
