@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from app.services.ai_service import ai_service
 from app.models.heritage import HeritageRecommendationsResponse
-
 # Request model for search
 class SearchRequest(BaseModel):
     query: str
