@@ -7,11 +7,11 @@ from app.routers import heritage
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Connect to MongoDB
+    
     mongodb.connect()
     yield
-    # Shutdown: Close MongoDB connection
-    mongodb.close()
+    
+    mongodb.close() 
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -19,7 +19,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS - IMPORTANT: Add your Streamlit port
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"],
@@ -28,7 +27,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+
 app.include_router(heritage.router, prefix=settings.API_PREFIX)
 
 @app.get("/")
