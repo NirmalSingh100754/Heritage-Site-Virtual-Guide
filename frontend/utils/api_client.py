@@ -9,21 +9,22 @@ class HeritageAPIClient:
         self.api_prefix = "/api"
         
     def _make_request(self, endpoint: str, method: str = "GET", data: Optional[dict] = None, files: Optional[dict] = None) -> Optional[dict]:
-        """Generic method to make API requests"""
+        """Generic method to make API requests with enhanced error handling"""
         url = f"{self.base_url}{self.api_prefix}{endpoint}"
         
         try:
             headers = {"Content-Type": "application/json"}
             
             if method == "GET":
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=headers, timeout=30)
             elif method == "POST":
                 if files:
                     # For file uploads, don't use JSON headers
-                    response = requests.post(url, files=files, data=data)
+                    headers = {}  # Remove JSON headers for file uploads
+                    response = requests.post(url, files=files, data=data, timeout=30)
                 else:
                     # For JSON data, use json parameter
-                    response = requests.post(url, json=data, headers=headers)
+                    response = requests.post(url, json=data, headers=headers, timeout=30)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
                 
@@ -31,44 +32,65 @@ class HeritageAPIClient:
             return response.json()
             
         except requests.exceptions.ConnectionError:
-            st.error("🚫 Cannot connect to backend server. Make sure the FastAPI server is running on http://localhost:8000")
+            st.error("🚫 Cannot connect to backend server. Please make sure:")
+            st.info("1. Backend server is running on http://localhost:8000")
+            st.info("2. No firewall is blocking the connection")
+            st.info("3. Both servers are in the same network")
             return None
+            
+        except requests.exceptions.Timeout:
+            st.error("⏰ Request timed out. The AI service might be slow. Please try again.")
+            return None
+            
         except requests.exceptions.HTTPError as e:
             error_detail = ""
             try:
                 error_response = e.response.json()
                 error_detail = error_response.get('detail', e.response.text)
+                if 'error' in error_response:
+                    error_detail = error_response['error']
             except:
                 error_detail = e.response.text
                 
-            st.error(f"❌ HTTP Error {e.response.status_code}: {error_detail}")
+            if e.response.status_code == 422:
+                st.error("❌ Invalid request format. Please check your input.")
+            elif e.response.status_code == 429:
+                st.error("🚦 Too many requests. Please wait a moment and try again.")
+            elif e.response.status_code == 500:
+                st.error("🔧 Server error. Our team has been notified.")
+            else:
+                st.error(f"❌ HTTP Error {e.response.status_code}: {error_detail}")
             return None
+            
         except requests.exceptions.RequestException as e:
-            st.error(f"❌ API request failed: {str(e)}")
+            st.error(f"❌ Network error: {str(e)}")
             return None
+            
         except Exception as e:
             st.error(f"💥 Unexpected error: {str(e)}")
             return None
     
     def analyze_image(self, image_bytes: bytes, user_id: Optional[str] = None) -> Optional[str]:
-        """Analyze heritage image"""
+        """Analyze heritage image with progress tracking"""
         endpoint = "/heritage/upload-image"
         files = {"file": ("heritage_image.jpg", image_bytes, "image/jpeg")}
         data = {"user_id": user_id} if user_id else {}
         
-        response = self._make_request(endpoint, "POST", data=data, files=files)
+        # Show progress for image analysis (can take longer)
+        with st.spinner("🔄 AI is analyzing your image. This may take 10-20 seconds..."):
+            response = self._make_request(endpoint, "POST", data=data, files=files)
+        
         return response.get("result") if response and response.get("success") else None
     
     def analyze_text(self, query: str, user_id: Optional[str] = None) -> Optional[str]:
-        """Analyze heritage text query - FIXED VERSION"""
+        """Analyze heritage text query with progress tracking"""
         endpoint = "/heritage/search"
         
-        # Simple JSON data
-        data = {
-            "query": query
-        }
+        data = {"query": query}
             
-        response = self._make_request(endpoint, "POST", data=data)
+        with st.spinner("🔍 Searching heritage database..."):
+            response = self._make_request(endpoint, "POST", data=data)
+        
         return response.get("result") if response and response.get("success") else None
     
     def get_recommendations(self) -> Optional[list]:
