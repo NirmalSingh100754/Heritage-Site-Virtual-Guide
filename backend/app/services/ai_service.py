@@ -52,6 +52,10 @@ class OpenRouterAIService:
     
     def _call_openrouter(self, messages, model="openai/gpt-3.5-turbo"):
         """Make API call to OpenRouter"""
+        if not self.api_key:
+            print("❌ OPENROUTER_API_KEY is not set!")
+            return None
+        
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -67,32 +71,58 @@ class OpenRouterAIService:
         }
         
         try:
+            print(f"🔄 Calling OpenRouter API with model: {model}")
             response = requests.post(f"{self.base_url}/chat/completions", headers=headers, json=data, timeout=30)
             response.raise_for_status()
             result = response.json()
-            return result["choices"][0]["message"]["content"]
+            content = result["choices"][0]["message"]["content"]
+            print(f"✅ Successfully got response from {model}")
+            return content
+        except requests.exceptions.HTTPError as e:
+            error_detail = ""
+            try:
+                error_response = e.response.json()
+                error_detail = error_response.get('error', {}).get('message', str(e))
+            except:
+                error_detail = e.response.text
+            print(f"❌ HTTP Error for {model}: {error_detail}")
+            return None
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Request Error for {model}: {str(e)}")
+            return None
         except Exception as e:
-            print(f"OpenRouter API Error: {str(e)}")
-            return f"Error calling AI service: {str(e)}"
+            print(f"❌ Unexpected Error for {model}: {str(e)}")
+            return None
     
     def analyze_heritage_image(self, image_data):
         """Analyze heritage site from image using OpenRouter with vision models"""
         try:
+            # Check API key first
+            if not self.api_key:
+                return "Error: OPENROUTER_API_KEY is not configured. Please set it in your environment variables."
+            
             # Convert image to base64
-            image = Image.open(io.BytesIO(image_data))
+            try:
+                image = Image.open(io.BytesIO(image_data))
+                # Convert to RGB if necessary (some images might be RGBA)
+                if image.mode in ('RGBA', 'LA', 'P'):
+                    image = image.convert('RGB')
+            except Exception as e:
+                return f"Error processing image: {str(e)}. Please ensure you uploaded a valid image file."
             
             # Convert image to base64 string
             buffered = io.BytesIO()
-            image.save(buffered, format="JPEG")
+            image.save(buffered, format="JPEG", quality=85)
             img_str = base64.b64encode(buffered.getvalue()).decode()
             
-            messages = [
+            # Standard OpenAI vision format (works for GPT-4 vision models)
+            messages_standard = [
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": self.image_prompt_template
+                            "text": self.image_prompt_template.strip()
                         },
                         {
                             "type": "image_url",
@@ -105,25 +135,48 @@ class OpenRouterAIService:
             ]
             
             # Use a vision model - try different models if one fails
+            # Updated to use more reliable vision models available on OpenRouter
             vision_models = [
-                "google/gemini-pro-vision",  # Free vision model
-                "openai/gpt-4-vision-preview",  # Paid but high quality
-                "anthropic/claude-3-sonnet"  # Alternative vision model
+                ("openai/gpt-4o", messages_standard),  # GPT-4 Omni with vision support
+                ("openai/gpt-4-turbo", messages_standard),  # GPT-4 Turbo with vision
+                ("openai/gpt-4-vision-preview", messages_standard),  # GPT-4 Vision Preview
+                ("anthropic/claude-3-opus", messages_standard),  # Claude 3 Opus
+                ("anthropic/claude-3-sonnet", messages_standard),  # Claude 3 Sonnet
+                ("anthropic/claude-3-haiku", messages_standard),  # Claude 3 Haiku (faster)
+                ("google/gemini-pro-vision", messages_standard),  # Free vision model
             ]
             
-            for model in vision_models:
+            last_error = None
+            for model, messages in vision_models:
                 try:
+                    print(f"🔄 Trying vision model: {model}")
                     result = self._call_openrouter(messages, model)
-                    if result and not result.startswith("Error"):
+                    if result and result.strip() and not result.startswith("Error"):
+                        print(f"✅ Successfully analyzed image using {model}")
                         return result
+                    else:
+                        print(f"⚠️ Model {model} returned empty or error result")
                 except Exception as e:
-                    print(f"Model {model} failed: {str(e)}")
+                    last_error = str(e)
+                    print(f"❌ Model {model} failed with exception: {last_error}")
                     continue
             
-            return "Sorry, I couldn't analyze this image. Please try again with a clearer image of a heritage site."
+            # If all models failed, return a helpful error message
+            error_msg = "Sorry, I couldn't analyze this image. "
+            if not self.api_key:
+                error_msg += "API key is not configured. Please check your environment variables."
+            elif last_error:
+                error_msg += f"All vision models failed. Last error: {last_error}. Please check your API key and try again."
+            else:
+                error_msg += "All vision models failed. Please check your API key configuration and try again with a clearer image."
+            
+            print(f"❌ All vision models failed. Last error: {last_error}")
+            return error_msg
             
         except Exception as e:
-            return f"Error analyzing image: {str(e)}"
+            error_msg = f"Error analyzing image: {str(e)}"
+            print(f"❌ Exception in analyze_heritage_image: {error_msg}")
+            return error_msg
     
     def search_heritage_info(self, query):
         """Get heritage information from text query using OpenRouter"""
@@ -149,16 +202,26 @@ class OpenRouterAIService:
                 "meta-llama/llama-2-13b-chat"  # Open source option
             ]
             
+            last_error = None
             for model in text_models:
                 try:
                     result = self._call_openrouter(messages, model)
-                    if result and not result.startswith("Error"):
+                    if result and result.strip():
                         return result
                 except Exception as e:
-                    print(f"Model {model} failed: {str(e)}")
+                    last_error = str(e)
+                    print(f"❌ Model {model} failed: {last_error}")
                     continue
             
-            return "Sorry, I couldn't find information about this heritage site. Please try a different search term."
+            error_msg = "Sorry, I couldn't find information about this heritage site. "
+            if not self.api_key:
+                error_msg += "API key is not configured."
+            elif last_error:
+                error_msg += f"Error: {last_error}"
+            else:
+                error_msg += "Please try a different search term."
+            
+            return error_msg
             
         except Exception as e:
             return f"Error processing query: {str(e)}"

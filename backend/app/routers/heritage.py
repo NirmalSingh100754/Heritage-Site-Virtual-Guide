@@ -71,3 +71,24 @@ async def test_endpoint():
     Simple test endpoint to verify API is working
     """
     return {"message": "✅ Heritage API is working!", "status": "success"}
+
+@router.get("/config-check")
+async def check_config():
+    """
+    Check API configuration status
+    """
+    from app.core.config import settings
+    from app.services.ai_service import ai_service
+    
+    config_status = {
+        "api_key_configured": bool(settings.OPENROUTER_API_KEY),
+        "api_key_length": len(settings.OPENROUTER_API_KEY) if settings.OPENROUTER_API_KEY else 0,
+        "base_url": settings.OPENROUTER_BASE_URL,
+        "mongodb_configured": bool(settings.MONGODB_USERNAME and settings.MONGODB_PASSWORD),
+    }
+    
+    return {
+        "status": "success",
+        "config": config_status,
+        "message": "API key is configured" if config_status["api_key_configured"] else "⚠️ API key is NOT configured. Please set OPENROUTER_KEY in your .env file"
+    }
